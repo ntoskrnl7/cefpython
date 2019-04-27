@@ -21,13 +21,14 @@
 #include "load_handler.h"
 #include "render_handler.h"
 #include "request_handler.h"
-
+#include "drag_handler.h"
 
 class ClientHandler : public CefClient,
                       public ContextMenuHandler,
                       public DialogHandler,
                       public DisplayHandler,
                       public DownloadHandler,
+                      public DragHandler,
                       public FocusHandler,
                       public JSDialogHandler,
                       public KeyboardHandler,
@@ -55,6 +56,10 @@ public:
     }
 
     CefRefPtr<CefDownloadHandler> GetDownloadHandler() override {
+        return this;
+    }
+
+    CefRefPtr<CefDragHandler> GetDragHandler() override {
         return this;
     }
 

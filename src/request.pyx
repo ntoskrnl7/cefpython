@@ -4,17 +4,35 @@
 
 include "cefpython.pyx"
 
+# noinspection PyUnresolvedReferences
+cimport cef_types
+
+# cef_urlrequest_flags_t
+UR_FLAG_NONE = cef_types.UR_FLAG_NONE
+UR_FLAG_SKIP_CACHE = cef_types.UR_FLAG_SKIP_CACHE
+UR_FLAG_ONLY_FROM_CACHE = cef_types.UR_FLAG_ONLY_FROM_CACHE
+UR_FLAG_ALLOW_STORED_CREDENTIALS = cef_types.UR_FLAG_ALLOW_STORED_CREDENTIALS
+UR_FLAG_REPORT_UPLOAD_PROGRESS = cef_types.UR_FLAG_REPORT_UPLOAD_PROGRESS
+UR_FLAG_NO_DOWNLOAD_DATA = cef_types.UR_FLAG_NO_DOWNLOAD_DATA
+UR_FLAG_NO_RETRY_ON_5XX = cef_types.UR_FLAG_NO_RETRY_ON_5XX
+UR_FLAG_STOP_ON_REDIRECT = cef_types.UR_FLAG_STOP_ON_REDIRECT
+
+
 class Request:
+    # TODO: autocomplete in PyCharm doesn't work for these flags
     Flags = {
         "None": cef_types.UR_FLAG_NONE,
         "SkipCache": cef_types.UR_FLAG_SKIP_CACHE,
-        "AllowCachedCredentials": cef_types.UR_FLAG_ALLOW_CACHED_CREDENTIALS,
-        "AllowCookies": 0, # keep for BC
+        "OnlyFromCache": cef_types.UR_FLAG_ONLY_FROM_CACHE,
+        "AllowCachedCredentials": 0, # keep dummy for BC
+        "AllowStoredCredentials": cef_types.UR_FLAG_ALLOW_STORED_CREDENTIALS,
+        "AllowCookies": 0, # keep dummy for BC
         "ReportUploadProgress": cef_types.UR_FLAG_REPORT_UPLOAD_PROGRESS,
-        "ReportLoadTiming": 0, # keep for BC
-        "ReportRawHeaders": 0, # keep for BC
+        "ReportLoadTiming": 0, # keep dummy for BC
+        "ReportRawHeaders": 0, # keep dummy for BC
         "NoDownloadData": cef_types.UR_FLAG_NO_DOWNLOAD_DATA,
         "NoRetryOn5xx": cef_types.UR_FLAG_NO_RETRY_ON_5XX,
+        "StopOnRedirect": cef_types.UR_FLAG_STOP_ON_REDIRECT,
     }
     
     def __init__(self):
@@ -81,10 +99,10 @@ cdef class PyRequest:
         # pyData is really of type "str", but Cython will throw
         # an error if we use that type: "Cannot convert 'bytes'
         # object to str implicitly. This is not portable to Py3."
-        cdef object pyData 
+        cdef bytes pyData
         cdef size_t bytesCount
         cdef void* voidData
-        cdef str pyFile
+        cdef bytes pyFile
         while iterator != elementVector.end():
             postDataElement = deref(iterator)
             if postDataElement.get().GetType() == cef_types.PDE_TYPE_EMPTY:
@@ -94,9 +112,9 @@ cdef class PyRequest:
                 bytesCount = postDataElement.get().GetBytesCount()
                 voidData = <void*>malloc(bytesCount)
                 postDataElement.get().GetBytes(bytesCount, voidData)
-                pyData = VoidPtrToString(voidData, bytesCount)
+                pyData = VoidPtrToBytes(voidData, bytesCount)
                 free(voidData)
-                if pyData.startswith('--') or retMultipart:
+                if pyData.startswith(b'--') or retMultipart:
                     # Content-Type: multipart/form-data
                     retMultipart.append(pyData)
                 else:
@@ -104,8 +122,8 @@ cdef class PyRequest:
                     retUrlEncoded.update(urlparse.parse_qsl(qs=pyData, 
                             keep_blank_values=True))
             elif postDataElement.get().GetType() == cef_types.PDE_TYPE_FILE:
-                pyFile = CefToPyString(postDataElement.get().GetFile())
-                retMultipart.append("@"+pyFile)
+                pyFile = CefToPyBytes(postDataElement.get().GetFile())
+                retMultipart.append(b"@"+pyFile)
             else:
                 raise Exception("Invalid type of CefPostDataElement")
             preinc(iterator)
@@ -117,15 +135,15 @@ cdef class PyRequest:
     cpdef py_void SetPostData(self, object pyPostData):
         cdef CefRefPtr[CefPostData] postData = CefPostData_Create()
         cdef CefRefPtr[CefPostDataElement] postDataElement
-        cdef py_string pyElement
+        cdef bytes pyElement
         cdef CefString sfile
         if type(pyPostData) == list:
             for pyElement in pyPostData:
-                if pyElement.startswith('--'):
+                if pyElement.startswith(b'--'):
                     postDataElement = CefPostDataElement_Create()
                     postDataElement.get().SetToBytes(len(pyElement), 
                             <char*>pyElement)
-                elif pyElement.startswith('@'):
+                elif pyElement.startswith(b'@'):
                     postDataElement = CefPostDataElement_Create()
                     PyToCefString(pyElement[1:], sfile)
                     postDataElement.get().SetToFile(sfile)
@@ -136,12 +154,13 @@ cdef class PyRequest:
                     raise Exception("Invalid element in postData: %s" % (
                             pyElement))
                 postData.get().AddElement(postDataElement)
+            self.GetCefRequest().get().SetPostData(postData)
         elif type(pyPostData) == dict:
-            pyElement = urllib.urlencode(pyPostData)
-            pyElement = str(pyElement)
+            pyElement = urllib_urlencode(pyPostData).encode()
             postDataElement = CefPostDataElement_Create()
             postDataElement.get().SetToBytes(len(pyElement), <char*>pyElement)
             postData.get().AddElement(postDataElement)
+            self.GetCefRequest().get().SetPostData(postData)
         else:
             raise Exception("Invalid type of postData, only dict|list allowed")
 

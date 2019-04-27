@@ -21,6 +21,9 @@ cdef class DragData:
     cpdef py_bool IsLink(self):
         return self.cef_drag_data.get().IsLink()
 
+    cpdef py_bool IsFile(self):
+        return self.cef_drag_data.get().IsFile()
+
     cpdef py_bool IsFragment(self):
         return self.cef_drag_data.get().IsFragment()
 
@@ -36,16 +39,31 @@ cdef class DragData:
     cpdef py_string GetFragmentHtml(self):
         return CefToPyString(self.cef_drag_data.get().GetFragmentHtml())
 
-    IF UNAME_SYSNAME == "Linux":
+    cpdef py_string GetFragmentBaseURL(self):
+        return CefToPyString(self.cef_drag_data.get().GetFragmentBaseURL())
 
-        cpdef PyImage GetImage(self):
-            cdef CefRefPtr[CefImage] cef_image =\
-                    self.cef_drag_data.get().GetImage()
-            if not cef_image.get():
-                raise Exception("Image is not available")
-            return PyImage_Init(cef_image)
+    cpdef py_string GetFileName(self):
+        return CefToPyString(self.cef_drag_data.get().GetFileName())
 
-        cpdef py_bool HasImage(self):
-            return self.cef_drag_data.get().HasImage()
+    cpdef py_bool GetFileNames(self, names):
+        cdef cpp_vector[CefString] cefFileNames;
+        cdef py_bool = self.cef_drag_data.get().GetFileNames(cefFileNames)
+        iterator = cefFileNames.begin()
+        while iterator != cefFileNames.end():
+            cefFileName = deref(iterator)
+            names.append(CefToPyString(cefFileName))
+            preinc(iterator)
+        
+    cpdef PyImage GetImage(self):
+        cdef CefRefPtr[CefImage] cef_image =\
+                self.cef_drag_data.get().GetImage()
+        if not cef_image.get():
+            raise Exception("Image is not available")
+        return PyImage_Init(cef_image)
 
-    # END IF UNAME_SYSNAME == "Linux":
+    cpdef tuple GetImageHotspot(self):
+        cdef CefPoint point = self.cef_drag_data.get().GetImageHotspot()
+        return point.x, point.y
+
+    cpdef py_bool HasImage(self):
+        return self.cef_drag_data.get().HasImage()

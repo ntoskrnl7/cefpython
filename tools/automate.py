@@ -116,9 +116,7 @@ def main():
     if len(sys.argv) <= 1:
         print(__doc__)
         sys.exit(1)
-
     setup_options(docopt.docopt(__doc__))
-
     if Options.build_cef:
         if not sys.version_info[:2] == (2, 7):
             print("ERROR: To build CEF from sources you need Python 2.7,"
@@ -266,7 +264,7 @@ def prebuilt_cef():
         print("ERROR: Could not find prebuilt binaries in the build dir:")
         print("       {cef_binary}".format(cef_binary=cef_binary))
         sys.exit(1)
-
+    
     build_cef_projects()
     create_prebuilt_binaries()
 
@@ -342,9 +340,9 @@ def build_cef_projects():
 
     if WINDOWS:
         fix_cmake_variables_permanently_windows()
-
+    
     fix_cef_include_files()
-
+    
     # Find cef_binary directory.
     # Might already be set if --prebuilt-cef flag was passed.
     if not Options.cef_binary:
@@ -369,7 +367,7 @@ def build_cef_projects():
             cef_binary = files[0]
         assert os.path.exists(cef_binary)
         Options.cef_binary = cef_binary
-
+    
     # Set build directory
     build_cefclient_dir = os.path.join(Options.cef_binary,
                                        "build_cefclient")
@@ -546,6 +544,57 @@ def fix_cmake_variables_permanently_windows():
         fp.write(contents.encode("utf-8"))
 
 
+# def fix_cmake_variables_for_MD_library(undo=False, try_undo=False):
+    # """Fix cmake variables or undo it. The try_undo param is
+    # for a case when want to be sure that the file wasn't modified,
+    # for example in case the last build failed."""
+
+    # # Replace /MT with /MD /wd4275 in cef/cmake/cef_variables.cmake
+    # # Warnings are treated as errors so this needs to be ignored:
+    # # >> warning C4275: non dll-interface class 'stdext::exception'
+    # # >> used as base for dll-interface class 'std::bad_cast'
+    # # This warning occurs only in VS2008, in VS2013 not.
+    # # This replacements must be unique for the undo operation
+    # # to be reliable.
+
+    # mt_find = r"/MT "
+    # mt_replace = r"/MD /wd4275 "
+
+    # mtd_find = r"/MTd "
+    # mtd_replace = r"/MDd /wd4275 "
+
+    # cmake_variables = os.path.join(Options.cef_binary, "cmake",
+    #                                "cef_variables.cmake")
+    # with open(cmake_variables, "rb") as fp:
+    #     contents = fp.read().decode("utf-8")
+    
+    # if try_undo:
+    #     matches1 = re.findall(re.escape(mt_replace), contents)
+    #     matches2 = re.findall(re.escape(mtd_replace), contents)
+
+    #     if len(matches1) or len(matches2):
+    #         undo = True
+    #     else:
+    #         return
+
+    # if undo:
+    #     (contents, count) = re.subn(re.escape(mt_replace), mt_find,
+    #                                 contents)
+    #     assert count == 2
+    #     (contents, count) = re.subn(re.escape(mtd_replace), mtd_find,
+    #                                 contents)
+    #     assert count == 1
+    # else:
+    #     (contents, count) = re.subn(re.escape(mt_find), mt_replace,
+    #                                 contents)                              
+    #     assert count == 2
+    #     (contents, count) = re.subn(re.escape(mtd_find), mtd_replace,
+    #                                 contents)
+    #     assert count == 1
+
+    # with open(cmake_variables, "wb") as fp:
+    #     fp.write(contents.encode("utf-8"))
+
 def fix_cmake_variables_for_MD_library(undo=False, try_undo=False):
     """Fix cmake variables or undo it. The try_undo param is
     for a case when want to be sure that the file wasn't modified,
@@ -559,20 +608,21 @@ def fix_cmake_variables_for_MD_library(undo=False, try_undo=False):
     # This replacements must be unique for the undo operation
     # to be reliable.
 
-    mt_find = r"/MT "
-    mt_replace = r"/MD /wd4275 "
+    mt_find = r"/MT"
+    mt_replace = r"/MD"
 
-    mtd_find = r"/MTd "
-    mtd_replace = r"/MDd /wd4275 "
+    mtd_find = r"/MTd"
+    mtd_replace = r"/MDd"
 
     cmake_variables = os.path.join(Options.cef_binary, "cmake",
                                    "cef_variables.cmake")
     with open(cmake_variables, "rb") as fp:
         contents = fp.read().decode("utf-8")
-
+    
     if try_undo:
         matches1 = re.findall(re.escape(mt_replace), contents)
         matches2 = re.findall(re.escape(mtd_replace), contents)
+
         if len(matches1) or len(matches2):
             undo = True
         else:
@@ -581,21 +631,14 @@ def fix_cmake_variables_for_MD_library(undo=False, try_undo=False):
     if undo:
         (contents, count) = re.subn(re.escape(mt_replace), mt_find,
                                     contents)
-        assert count == 2
-        (contents, count) = re.subn(re.escape(mtd_replace), mtd_find,
-                                    contents)
         assert count == 1
     else:
         (contents, count) = re.subn(re.escape(mt_find), mt_replace,
-                                    contents)
-        assert count == 2
-        (contents, count) = re.subn(re.escape(mtd_find), mtd_replace,
-                                    contents)
+                                    contents)                              
         assert count == 1
 
     with open(cmake_variables, "wb") as fp:
         fp.write(contents.encode("utf-8"))
-
 
 def build_wrapper_library_mac():
     # On Mac it is required to link libcef_dll_wrapper against
@@ -656,7 +699,9 @@ def prepare_build_command(build_lib=False, vcvars=None):
                 command.append(get_vcvars_for_python())
             command.append(VS_PLATFORM_ARG)
         else:
-            if int(Options.cef_branch) >= 2704:
+            if int(Options.cef_branch) >= 2987:
+                command.append(VS2017_VCVARS)
+            elif int(Options.cef_branch) >= 2704:
                 command.append(VS2015_VCVARS)
             else:
                 command.append(VS2013_VCVARS)
@@ -824,9 +869,10 @@ def create_prebuilt_binaries():
 
 def get_available_python_compilers():
     all_python_compilers = OrderedDict([
-        ("2008", VS2008_VCVARS),
+#        ("2008", VS2008_VCVARS),
         ("2010", VS2010_VCVARS),
         ("2015", VS2015_VCVARS),
+        ("2017", VS2017_VCVARS)
     ])
     ret_compilers = OrderedDict()
     for msvs in all_python_compilers:

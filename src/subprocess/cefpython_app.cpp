@@ -21,6 +21,7 @@
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
 #include <gdk/gdkx.h>
+#include "client_handler/x11.h"
 #include "print_handler_gtk.h"
 #endif  // OS_LINUX
 #endif  // BROWSER_PROCESS
@@ -177,11 +178,13 @@ void CefPythonApp::OnBeforeChildProcessLaunch(
 #ifdef BROWSER_PROCESS
     // This is included only in the Browser process, when building
     // the libcefpythonapp library.
+#if defined(OS_WINDOWS)
     if (IsProcessDpiAware()) {
         // It is required to set DPI awareness in subprocesses
         // as well, see Issue #358.
         command_line->AppendSwitch("enable-high-dpi-support");
     }
+#endif // OS_WINDOWS
     BrowserProcessHandler_OnBeforeChildProcessLaunch(command_line);
 #endif // BROWSER_PROCESS
 
@@ -219,10 +222,14 @@ CefRefPtr<CefPrintHandler> CefPythonApp::GetPrintHandler() {
 #if defined(OS_LINUX)
     // For print handler to work GTK must be initialized. This is
     // required for some of the examples.
+    // --
+    // A similar code is in client_handler/x11.cpp. If making changes here,
+    // make changes there as well.
     GdkDisplay* gdk_display = gdk_display_get_default();
     if (!gdk_display) {
         LOG(INFO) << "[Browser process] Initialize GTK";
         gtk_init(0, NULL);
+        InstallX11ErrorHandlers();
     }
 #endif
 #endif
@@ -255,14 +262,6 @@ void CefPythonApp::OnBrowserCreated(CefRefPtr<CefBrowser> browser) {
 void CefPythonApp::OnBrowserDestroyed(CefRefPtr<CefBrowser> browser) {
     LOG(INFO) << "[Renderer process] OnBrowserDestroyed()";
     RemoveJavascriptBindings(browser);
-}
-
-bool CefPythonApp::OnBeforeNavigation(CefRefPtr<CefBrowser> browser,
-                                      CefRefPtr<CefFrame> frame,
-                                      CefRefPtr<CefRequest> request,
-                                      cef_navigation_type_t navigation_type,
-                                      bool is_redirect) {
-    return false;
 }
 
 void CefPythonApp::OnContextCreated(CefRefPtr<CefBrowser> browser,
@@ -338,15 +337,10 @@ void CefPythonApp::OnContextReleased(CefRefPtr<CefBrowser> browser,
     // ------------------------------------------------------------------------
     // 2. Remove python callbacks for a frame.
     // ------------------------------------------------------------------------
-    // If this is the main frame then the message won't arrive
-    // to the browser process, as browser is being destroyed,
-    // but it doesn't matter because in LifespanHandler_BeforeClose()
+    // This is already done via RemovePyFrame called from
+    // V8ContextHandler_OnContextReleased.
+    // If this is the main frame then in LifespanHandler_BeforeClose()
     // we're calling RemovePythonCallbacksForBrowser().
-    message = CefProcessMessage::Create("RemovePythonCallbacksForFrame");
-    arguments = message->GetArgumentList();
-    // TODO: int64 precision lost
-    arguments->SetInt(0, (int)(frame->GetIdentifier()));
-    browser->SendProcessMessage(PID_BROWSER, message);
     // ------------------------------------------------------------------------
     // 3. Clear javascript callbacks.
     // ------------------------------------------------------------------------

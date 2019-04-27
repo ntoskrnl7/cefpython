@@ -12,6 +12,11 @@ cimport cef_types
 
 LOGSEVERITY_DEFAULT = cef_types.LOGSEVERITY_DEFAULT
 LOGSEVERITY_VERBOSE = cef_types.LOGSEVERITY_VERBOSE
+# LOGSEVERITY_DEBUG is not exposed, as it is the same
+# as LOGSEVERITY_VERBOSE, and because it would be confusing
+# as currently passing --debug arg to app causes it to
+# set logseverity to LOGSEVERITY_INFO. Verbose logseverity
+# contains too much information.
 LOGSEVERITY_INFO = cef_types.LOGSEVERITY_INFO
 LOGSEVERITY_WARNING = cef_types.LOGSEVERITY_WARNING
 LOGSEVERITY_ERROR = cef_types.LOGSEVERITY_ERROR
@@ -92,8 +97,8 @@ cdef void SetApplicationSettings(
             cefAppSettings.pack_loading_disabled = int(appSettings[key])
         elif key == "uncaught_exception_stack_size":
             cefAppSettings.uncaught_exception_stack_size = <int>int(appSettings[key])
-        elif key == "single_process":
-            cefAppSettings.single_process = int(appSettings[key])
+        # elif key == "single_process":
+        #     cefAppSettings.single_process = int(appSettings[key])
         elif key == "browser_subprocess_path":
             cefString = new CefString(&cefAppSettings.browser_subprocess_path)
             PyToCefStringPointer(appSettings[key], cefString)
@@ -134,7 +139,10 @@ cdef void SetBrowserSettings(
     cdef CefString* cefString
 
     for key in browserSettings:
-        if key == "accept_language_list":
+        if key == "inherit_client_handlers_for_popups":
+            # CEF Python only options. These are not to be found in CEF.
+            continue
+        elif key == "accept_language_list":
             cefString = new CefString(&cefBrowserSettings.accept_language_list)
             PyToCefStringPointer(browserSettings[key], cefString)
             del cefString
@@ -191,12 +199,7 @@ cdef void SetBrowserSettings(
             else:
                 cefBrowserSettings.javascript = cef_types.STATE_ENABLED
         elif key == "javascript_open_windows_disallowed":
-            if browserSettings[key]:
-                cefBrowserSettings.javascript_open_windows = (
-                        cef_types.STATE_DISABLED)
-            else:
-                cefBrowserSettings.javascript_open_windows = (
-                        cef_types.STATE_ENABLED)
+            Debug("DEPRECATED: 'javascript_open_windows_disallowed' setting")
         elif key == "javascript_close_windows_disallowed":
             if browserSettings[key]:
                 cefBrowserSettings.javascript_close_windows = (

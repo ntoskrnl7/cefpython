@@ -39,10 +39,24 @@ void DisplayHandler::OnStatusMessage(CefRefPtr<CefBrowser> browser,
 
 
 bool DisplayHandler::OnConsoleMessage(CefRefPtr<CefBrowser> browser,
-                                     const CefString& message,
-                                     const CefString& source,
-                                     int line)
+                                      cef_log_severity_t level,
+                                      const CefString& message,
+                                      const CefString& source,
+                                      int line)
 {
     REQUIRE_UI_THREAD();
-    return DisplayHandler_OnConsoleMessage(browser, message, source, line);
+    return DisplayHandler_OnConsoleMessage(browser, level, message, source,
+                                           line);
+}
+
+bool DisplayHandler::OnAutoResize(CefRefPtr<CefBrowser> browser,
+                                  const CefSize& new_size) {
+    REQUIRE_UI_THREAD();
+    return DisplayHandler_OnAutoResize(browser, new_size);
+}
+
+void DisplayHandler::OnLoadingProgressChange(CefRefPtr<CefBrowser> browser,
+                                             double progress) {
+    REQUIRE_UI_THREAD();
+    return DisplayHandler_OnLoadingProgressChange(browser, progress);
 }

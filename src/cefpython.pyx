@@ -2,152 +2,6 @@
 # All rights reserved. Licensed under BSD 3-clause license.
 # Project website: https://github.com/cztomczak/cefpython
 
-"""
-CHANGES in CEF since v31..v51.
-Below are listed new or modified functions/classes, but not all of them.
--------------------------------------------------------------------------------
-
-CefEnableHighDPISupport()
-
-CefRequestContext
-    NEW BROWSER SETTINGS that can be get/set using request context:
-        * GetAllPreferences - all preferences for browser's request context
-        * SetPreference
-        * many more methods has/get/canset...
-    _cef_request_context_settings_t:
-        cache_path
-        persist_session_cookies
-        persist_user_preferences
-        ignore_certificate_errors
-    PurgePluginListCache
-    GetDefaultCookieManager
-    GetCachePath
-    IsSharingWith - possible to create new context that shares
-                    storage with another context
-    more methods...
-
-CefRequestContextHandler
-    OnBeforePluginLoad
-
-CefBrowserSettings
-    windowless_frame_rate - **OSR**
-
-CefBrowserHost
-    GetNavigationEntries
-    PrintToPDF
-    ParentWindowWillClose() - REMOVED, update .py examples
-    SetWindowVisibility()
-    ShowDevTools(WindowInfo, CefClient, BrowserSettings, inspect_element_at)
-    CloseDevTools [DONE]
-    ReplaceMisspelling
-    AddWordToDictionary
-    Invalidate
-    NotifyMoveOrResizeStarted() - call in WM_MOVE, WM_MOVING, WM_SIZING on Win
-    GetWindowlessFrameRate - **OSR**
-    SetWindowlessFrameRate - **OSR**
-    DragTargetDragEnter
-    DragTargetDragOver
-    DragTargetDragLeave
-    DragTargetDrop
-    DragSourceEndedAt
-    DragSourceSystemDragEnded
-    HasDevTools
-    DownloadImage
-    HasView
-
-CefRequestHandler
-    OnOpenURLFromTab
-    OnBeforeResourceLoad - new arg CefRequestCallback
-    OnResourceResponse
-    GetResourceResponseFilter - easy way to alter response, no need for the
-                         complicated wxpython-response.py example (Issue #229)
-    OnResourceLoadComplete
-    OnCertificateError - new args: browser and ssl_info.
-                         No more need to set it using
-                         cefpython.SetGlobalClientCallback()
-    OnRenderViewReady
-
-Support for handling onbeforeunload in LifespanHandler::DoClose with
-the use of Browser.TryCloseBrowser() or Browser.CloseBrowser.
-
-CefRequest
-    SetReferrer
-    GetReferrerURL
-    GetReferrerPolicy
-    GetIdentifier
-
-CefResponse
-    GetError
-    SetError
-
-CEF exposes Views/Aura framework as an alternative API
-for client applications. This can be a replacement for
-WinAPI/GTK/X11/Cocoa UI frameworks. See for more info:
-https://bitbucket.org/chromiumembedded/cef/issues/1749
-
-CefPrintHandler - Linux only
-CefPrintSettings
-
-CefDisplayHandler
-    OnFaviconURLChange
-    OnFullscreenModeChange
-
-CefRenderHandler
-    OnCursorChange - new args: type and custom_cursor_info
-    StartDragging
-    UpdateDragCursor
-    OnScrollOffsetChanged - new args: x,y
-
-
-In upstream cefclient:
-1. g_signal_connect(G_OBJECT(window_), "configure-event",
-                    G_CALLBACK(&RootWindowGtk::WindowConfigure), this);
-   browser->GetHost()->NotifyMoveOrResizeStarted();
-2. g_signal_connect(G_OBJECT(window_), "focus-in-event",
-                    G_CALLBACK(&RootWindowGtk::WindowFocusIn), this);
-   self->browser_window_->SetFocus(true);
-
-When window is minimized set browser size to 0x0 to reduce resource usage.
-See cefclient:
-- on Windows see https://github.com/cztomczak/phpdesktop/issues/179
-- on Linux see root_window_gtk.cc > WindowState
-
-CefContextMenuHandler
-    RunContextMenu
-CefContextMenuParams
-    GetMisspelledWord
-    GetDictionarySuggestions
-    IsSpellCheckEnabled
-    IsCustomMenu
-    IsPepperMenu
-
-CefCompletionCallback - added to many cookie functions to run asynchronously
-                        on the IO thread
-
-include/cef_parser.h - url/css/json/etc parsers
-
-CefResourceBundle
-CefResponseFilter
-
-CefValue
-
-cef_get_current_platform_thread_id()
-cef_get_current_platform_thread_handle()
-
-cef_get_xdisplay();
-
-include/cef_ssl_info.h
-include/wrapper/cef_helpers.h - CefDeleteOnThread() free object on
-                                the specified thread
-include/wrapper/cef_resource_manager.h
-
-CefPostData
-    HasExcludedElements
-
--------------------------------------------------------------------------------
-END OF: CHANGES in CEF since v31..v47.
-"""
-
 # IMPORTANT notes:
 #
 # - cdef/cpdef functions returning something other than a Python object
@@ -278,20 +132,28 @@ import json
 import datetime
 # noinspection PyUnresolvedReferences
 import random
+# noinspection PyUnresolvedReferences
+import struct
+# noinspection PyUnresolvedReferences
+import base64
 
-if sys.version_info.major == 2:
+# Must use compile-time condition instead of checking sys.version_info.major
+# otherwise results in "ImportError: cannot import name urlencode" strange
+# error in Python 3.6.
+IF PY_MAJOR_VERSION == 2:
     # noinspection PyUnresolvedReferences
     import urlparse
-else:
-    # noinspection PyUnresolvedReferences
-    from urllib import parse as urlparse
-
-if sys.version_info.major == 2:
     # noinspection PyUnresolvedReferences
     from urllib import pathname2url as urllib_pathname2url
-else:
+    # noinspection PyUnresolvedReferences
+    from urllib import urlencode as urllib_urlencode
+ELSE:
+    # noinspection PyUnresolvedReferences
+    from urllib import parse as urlparse
     # noinspection PyUnresolvedReferences
     from urllib.request import pathname2url as urllib_pathname2url
+    # noinspection PyUnresolvedReferences
+    from urllib.parse import urlencode as urllib_urlencode
 
 # noinspection PyUnresolvedReferences
 from cpython.version cimport PY_MAJOR_VERSION
@@ -387,10 +249,11 @@ cdef extern from *:
 # cannot cimport *, that would cause name conflicts with constants
 # noinspection PyUnresolvedReferences
 from cef_types cimport (
-    CefSettings, CefBrowserSettings, CefRect, CefSize, CefPoint,
+    CefSettings, CefBrowserSettings, CefRect, CefSize, CefPoint, CefDraggableRegion,
     CefKeyEvent, CefMouseEvent, CefScreenInfo,
     PathKey, PK_DIR_EXE, PK_DIR_MODULE,
     int32, uint32, int64, uint64,
+    cef_log_severity_t,
 )
 
 # noinspection PyUnresolvedReferences
@@ -439,6 +302,7 @@ from main_message_loop cimport *
 # noinspection PyUnresolvedReferences
 from cef_views cimport *
 from cef_log cimport *
+from cef_file_util cimport *
 
 # -----------------------------------------------------------------------------
 # GLOBAL VARIABLES
@@ -451,6 +315,7 @@ g_debug = False
 # The string_encoding key must be set early here and also in Initialize.
 g_applicationSettings = {"string_encoding": "utf-8"}
 g_commandLineSwitches = {}
+g_browser_settings = {}
 
 # If ApplicationSettings.unique_request_context_per_browser is False
 # then a shared request context is used for all browsers. Otherwise
@@ -468,6 +333,7 @@ cdef dict g_globalClientCallbacks = {}
 
 # -----------------------------------------------------------------------------
 
+include "cef_types.pyx"
 include "utils.pyx"
 include "string_utils.pyx"
 IF UNAME_SYSNAME == "Windows":
@@ -507,15 +373,13 @@ include "command_line.pyx"
 include "app.pyx"
 include "drag_data.pyx"
 include "helpers.pyx"
-
-# Currently used only on Linux via DragData. Do not include on other
-# platforms otherwise warning about unused function appears.
-IF UNAME_SYSNAME == "Linux":
-    include "image.pyx"
+include "image.pyx"
 
 # Handlers
+include "handlers/accessibility_handler.pyx"
 include "handlers/browser_process_handler.pyx"
 include "handlers/display_handler.pyx"
+include "handlers/drag_handler.pyx"
 include "handlers/focus_handler.pyx"
 include "handlers/javascript_dialog_handler.pyx"
 include "handlers/keyboard_handler.pyx"
@@ -642,9 +506,7 @@ def Initialize(applicationSettings=None, commandLineSwitches=None, **kwargs):
 
     Debug("Initialize() called")
 
-    # Mac initialization. Need to call NSApplication.sharedApplication()
-    # and do NSApplication methods swizzling to implement
-    # CrAppControlProtocol. See Issue 156.
+    # Additional initialization on Mac, see util_mac.mm.
     IF UNAME_SYSNAME == "Darwin":
         MacInitialize()
 
@@ -722,9 +584,18 @@ def Initialize(applicationSettings=None, commandLineSwitches=None, **kwargs):
     # ------------------------------------------------------------------------
     if not "multi_threaded_message_loop" in application_settings:
         application_settings["multi_threaded_message_loop"] = False
-    if not "single_process" in application_settings:
-        application_settings["single_process"] = False
+    #if not "single_process" in application_settings:
+    #    application_settings["single_process"] = False
     # ------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------
+    # Fix GPUCache/ folder creation when using in-memory cache (Issue #419)
+    # ------------------------------------------------------------------------
+    if not "cache_path" in application_settings:
+        application_settings["cache_path"] = ""
+    if not application_settings["cache_path"]:
+        g_commandLineSwitches["disable-gpu-shader-disk-cache"] = ""
+
 
     cdef CefRefPtr[CefApp] cefApp = <CefRefPtr[CefApp]?>new CefPythonApp()
 
@@ -756,8 +627,11 @@ def Initialize(applicationSettings=None, commandLineSwitches=None, **kwargs):
     # External message pump
     if GetAppSetting("external_message_pump")\
             and not g_external_message_pump.get():
-        g_external_message_pump.reset(
-                MainMessageLoopExternalPump.Create().get())
+        Debug("Create external message pump")
+        # Using .reset() here to assign new instance was causing
+        # MainMessageLoopExternalPump destructor to be called. Strange.
+        g_external_message_pump.Assign(
+                MainMessageLoopExternalPump.Create())
 
     Debug("CefInitialize()")
     cdef cpp_bool ret
@@ -852,9 +726,12 @@ def CreateBrowserSync(windowInfo=None,
     if window_title and windowInfo.parentWindowHandle == 0:
         windowInfo.windowName = window_title
 
+    # Browser settings
     if not browserSettings:
         browserSettings = {}
-
+    # CEF Python only settings
+    if "inherit_client_handlers_for_popups" not in browserSettings:
+        browserSettings["inherit_client_handlers_for_popups"] = True
     cdef CefBrowserSettings cefBrowserSettings
     SetBrowserSettings(browserSettings, &cefBrowserSettings)
 
@@ -904,6 +781,15 @@ def CreateBrowserSync(windowInfo=None,
 
     Debug("CefBrowser window handle = "
           +str(<uintptr_t>cefBrowser.get().GetHost().get().GetWindowHandle()))
+
+    # Make a copy as browserSettings is a reference only that might
+    # get destroyed later.
+    global g_browser_settings
+    cdef int browser_id = cefBrowser.get().GetIdentifier()
+    g_browser_settings[browser_id] = {}
+    for key in browserSettings:
+        g_browser_settings[browser_id][key] =\
+            copy.deepcopy(browserSettings[key])
 
     # Request context - part 2/2.
     if g_applicationSettings["unique_request_context_per_browser"]:
@@ -976,11 +862,6 @@ def QuitMessageLoop():
 
 def Shutdown():
     Debug("Shutdown()")
-
-    # Release shared request context. This is sometimes causing
-    # segmentation fault, so disabling it for now. See Issue #333:
-    # https://github.com/cztomczak/cefpython/issues/333
-    # OFF: g_shared_request_context.Assign(NULL)
 
     # Run some message loop work, force closing browsers and then run
     # some message loop work again for the browsers to close cleanly.
@@ -1063,15 +944,26 @@ def Shutdown():
         NonCriticalError("Shutdown called, but there are still browser"
                          " references alive")
 
+    # Release shared request context. In the past this was sometimes
+    # causing segmentation fault. See Issue #333:
+    # https://github.com/cztomczak/cefpython/issues/333
+    # Debug("Free g_shared_request_context")
+    # g_shared_request_context.Assign(NULL)
+
+    # Release external message pump before CefShutdown, so that
+    # message pump timer is killed.
+    if g_external_message_pump.get():
+        Debug("Reset external message pump")
+        # Reset will set it to NULL
+        g_external_message_pump.reset()
+
     Debug("CefShutdown()")
     with nogil:
         CefShutdown()
 
-    # Release external message pump, as in cefclient after Shutdown
-    if g_external_message_pump.get():
-        # Reset will set it to NULL
-        g_external_message_pump.reset()
-
+    # Additional cleanup on Mac, see util_mac.mm.
+    IF UNAME_SYSNAME == "Darwin":
+        MacShutdown()
 
 def SetOsModalLoop(py_bool modalLoop):
     cdef cpp_bool cefModalLoop = bool(modalLoop)
@@ -1080,11 +972,31 @@ def SetOsModalLoop(py_bool modalLoop):
 
 cpdef py_void SetGlobalClientCallback(py_string name, object callback):
     global g_globalClientCallbacks
-    if name in ["OnCertificateError", "OnBeforePluginLoad", "OnAfterCreated"]:
+    # Global callbacks are prefixed with "_" in documentation.
+    # Accept both with and without a prefix.
+    if name.startswith("_"):
+        name = name[1:]
+    if name in ["OnCertificateError", "OnBeforePluginLoad", "OnAfterCreated",
+                "OnAccessibilityTreeChange", "OnAccessibilityLocationChange"]:
         g_globalClientCallbacks[name] = callback
     else:
         raise Exception("SetGlobalClientCallback() failed: "\
                 "invalid callback name = %s" % name)
+
+cpdef py_void SetGlobalClientHandler(object clientHandler):
+    if not hasattr(clientHandler, "__class__"):
+        raise Exception("SetGlobalClientHandler() failed: __class__ "
+                        "attribute missing")
+    cdef dict methods = {}
+    cdef py_string key
+    cdef object method
+    cdef tuple value
+    for value in inspect.getmembers(clientHandler,
+            predicate=inspect.ismethod):
+        key = value[0]
+        method = value[1]
+        if key and key[0:2] != '__':
+            SetGlobalClientCallback(key, method)
 
 cpdef object GetGlobalClientCallback(py_string name):
     global g_globalClientCallbacks
@@ -1111,3 +1023,12 @@ cpdef dict GetVersion():
         cef_commit_hash=__cef_commit_hash__,
         cef_commit_number=__cef_commit_number__,
     )
+
+cpdef LoadCrlSetsFile(py_string path):
+    CefLoadCRLSetsFile(PyToCefStringValue(path))
+
+cpdef GetDataUrl(data, mediatype="html"):
+    html = data.encode("utf-8", "replace")
+    b64 = base64.b64encode(html).decode("utf-8", "replace")
+    ret = "data:text/html;base64,{data}".format(data=b64)
+    return ret

@@ -9,10 +9,12 @@
 bool RequestHandler::OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
                                     CefRefPtr<CefFrame> frame,
                                     CefRefPtr<CefRequest> request,
+                                    bool user_gesture,
                                     bool is_redirect)
 {
     REQUIRE_UI_THREAD();
-    return RequestHandler_OnBeforeBrowse(browser, frame, request, is_redirect);
+    return RequestHandler_OnBeforeBrowse(browser, frame, request,
+                                         user_gesture, is_redirect);
 }
 
 
@@ -114,4 +116,19 @@ void RequestHandler::OnPluginCrashed(CefRefPtr<CefBrowser> browser,
 {
     REQUIRE_UI_THREAD();
     RequestHandler_OnPluginCrashed(browser, plugin_path);
+}
+
+bool RequestHandler::CanGetCookies(CefRefPtr<CefBrowser> browser,
+                                   CefRefPtr<CefFrame> frame,
+                                   CefRefPtr<CefRequest> request) {
+    REQUIRE_IO_THREAD();
+    return RequestHandler_CanGetCookies(browser, frame, request);
+}
+
+bool RequestHandler::CanSetCookie(CefRefPtr<CefBrowser> browser,
+                                  CefRefPtr<CefFrame> frame,
+                                  CefRefPtr<CefRequest> request,
+                                  const CefCookie& cookie) {
+    REQUIRE_IO_THREAD();
+    return RequestHandler_CanSetCookie(browser, frame, request, cookie);
 }

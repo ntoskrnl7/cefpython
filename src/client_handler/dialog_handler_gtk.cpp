@@ -1,8 +1,5 @@
-// Default dialog handler implementation on Linux.
-// Copied from upstream cefclient with changes:
-// - Rewrote GetWindow() func
-// - Removed "client" namespace
-// - Changed titles of JS alerts, removed URL and "Javascript" word
+// COPIED from upstream "cef/tests/cefclient/browser/" directory
+// with minor modifications. See the .patch file in current directory.
 
 // Copyright (c) 2015 The Chromium Embedded Framework Authors. All rights
 // reserved. Use of this source code is governed by a BSD-style license that
@@ -10,16 +7,12 @@
 
 #include <libgen.h>
 #include <sys/stat.h>
-#include <X11/Xlib.h>
-#include <gtk/gtk.h>
-#include <gdk/gdkx.h>
 
 #include "include/cef_browser.h"
 #include "include/cef_parser.h"
 #include "include/wrapper/cef_helpers.h"
 
 #include "include/base/cef_logging.h"
-
 #include "dialog_handler_gtk.h"
 #include "x11.h"
 
@@ -43,10 +36,10 @@ std::string GetDescriptionFromMimeType(const std::string& mime_type) {
     const char* mime_type;
     const char* label;
   } kWildCardMimeTypes[] = {
-    { "audio", "Audio Files" },
-    { "image", "Image Files" },
-    { "text", "Text Files" },
-    { "video", "Video Files" },
+      {"audio", "Audio Files"},
+      {"image", "Image Files"},
+      {"text", "Text Files"},
+      {"video", "Video Files"},
   };
 
   for (size_t i = 0;
@@ -138,52 +131,9 @@ void AddFilters(GtkFileChooser* chooser,
   }
 }
 
-GtkWindow* GetWindow(CefRefPtr<CefBrowser> browser) {
-  // -- REWRITTEN FOR CEF PYTHON USE CASE --
-  // X11 window handle
-  ::Window xwindow = browser->GetHost()->GetWindowHandle();
-  // X11 display
-  ::Display* xdisplay = cef_get_xdisplay();
-  // GDK display
-  GdkDisplay* gdk_display = NULL;
-  if (xdisplay) {
-    // See if we can find GDK display using X11 display
-    gdk_display = gdk_x11_lookup_xdisplay(xdisplay);
-  }
-  if (!gdk_display) {
-    // If not then get the default display
-    gdk_display = gdk_display_get_default();
-  }
-  if (!gdk_display) {
-    // The tkinter_.py and hello_world.py examples do not use GTK
-    // internally, so GTK wasn't yet initialized and must do it
-    // now, so that display is available. Also must install X11
-    // error handlers to avoid 'BadWindow' errors.
-    LOG(INFO) << "[Browser process] Initialize GTK";
-    gtk_init(0, NULL);
-    InstallX11ErrorHandlers();
-    // Now the display is available
-    gdk_display = gdk_display_get_default();
-  }
-  // In kivy_.py example getting error message:
-  // > Can't create GtkPlug as child of non-GtkSocket
-  // However dialog handler works just fine.
-  GtkWidget* widget = gtk_plug_new_for_display(gdk_display, xwindow);
-  // Getting top level widget doesn't seem to be required.
-  // OFF: GtkWidget* toplevel = gtk_widget_get_toplevel(widget);
-  GtkWindow* window = GTK_WINDOW(widget);
-  if (!window) {
-    LOG(ERROR) << "No GtkWindow for browser";
-  }
-  return window;
-}
-
 }  // namespace
 
-
-ClientDialogHandlerGtk::ClientDialogHandlerGtk()
-    : gtk_dialog_(NULL) {
-}
+ClientDialogHandlerGtk::ClientDialogHandlerGtk() : gtk_dialog_(NULL) {}
 
 bool ClientDialogHandlerGtk::OnFileDialog(
     CefRefPtr<CefBrowser> browser,
@@ -200,7 +150,7 @@ bool ClientDialogHandlerGtk::OnFileDialog(
 
   // Remove any modifier flags.
   FileDialogMode mode_type =
-     static_cast<FileDialogMode>(mode & FILE_DIALOG_TYPE_MASK);
+      static_cast<FileDialogMode>(mode & FILE_DIALOG_TYPE_MASK);
 
   if (mode_type == FILE_DIALOG_OPEN || mode_type == FILE_DIALOG_OPEN_MULTIPLE) {
     action = GTK_FILE_CHOOSER_ACTION_OPEN;
@@ -238,25 +188,20 @@ bool ClientDialogHandlerGtk::OnFileDialog(
     }
   }
 
-  GtkWindow* window = GetWindow(browser);
+  GtkWindow* window = CefBrowser_GetGtkWindow(browser);
   if (!window)
     return false;
 
   GtkWidget* dialog = gtk_file_chooser_dialog_new(
-      title_str.c_str(),
-      GTK_WINDOW(window),
-      action,
-      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
-      accept_button, GTK_RESPONSE_ACCEPT,
-      NULL);
+      title_str.c_str(), GTK_WINDOW(window), action, GTK_STOCK_CANCEL,
+      GTK_RESPONSE_CANCEL, accept_button, GTK_RESPONSE_ACCEPT, NULL);
 
   if (mode_type == FILE_DIALOG_OPEN_MULTIPLE)
     gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(dialog), TRUE);
 
   if (mode_type == FILE_DIALOG_SAVE) {
     gtk_file_chooser_set_do_overwrite_confirmation(
-        GTK_FILE_CHOOSER(dialog),
-        !!(mode & FILE_DIALOG_OVERWRITEPROMPT_FLAG));
+        GTK_FILE_CHOOSER(dialog), !!(mode & FILE_DIALOG_OVERWRITEPROMPT_FLAG));
   }
 
   gtk_file_chooser_set_show_hidden(GTK_FILE_CHOOSER(dialog),
@@ -269,8 +214,7 @@ bool ClientDialogHandlerGtk::OnFileDialog(
     struct stat sb;
     if (stat(file_path.c_str(), &sb) == 0 && S_ISREG(sb.st_mode)) {
       // Use the directory and name of the existing file.
-      gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog),
-                                    file_path.data());
+      gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), file_path.data());
       exists = true;
     }
 
@@ -337,14 +281,13 @@ bool ClientDialogHandlerGtk::OnFileDialog(
   return true;
 }
 
-bool ClientDialogHandlerGtk::OnJSDialog(
-    CefRefPtr<CefBrowser> browser,
-    const CefString& origin_url,
-    JSDialogType dialog_type,
-    const CefString& message_text,
-    const CefString& default_prompt_text,
-    CefRefPtr<CefJSDialogCallback> callback,
-    bool& suppress_message) {
+bool ClientDialogHandlerGtk::OnJSDialog(CefRefPtr<CefBrowser> browser,
+                                        const CefString& origin_url,
+                                        JSDialogType dialog_type,
+                                        const CefString& message_text,
+                                        const CefString& default_prompt_text,
+                                        CefRefPtr<CefJSDialogCallback> callback,
+                                        bool& suppress_message) {
   CEF_REQUIRE_UI_THREAD();
 
   GtkButtonsType buttons = GTK_BUTTONS_NONE;
@@ -378,26 +321,20 @@ bool ClientDialogHandlerGtk::OnJSDialog(
     // title += CefFormatUrlForSecurityDisplay(origin_url).ToString();
   }
 
-  GtkWindow* window = GetWindow(browser);
+  GtkWindow* window = CefBrowser_GetGtkWindow(browser);
   if (!window)
     return false;
 
-  gtk_dialog_ = gtk_message_dialog_new(GTK_WINDOW(window),
-                                       GTK_DIALOG_MODAL,
-                                       gtk_message_type,
-                                       buttons,
-                                       "%s",
+  gtk_dialog_ = gtk_message_dialog_new(GTK_WINDOW(window), GTK_DIALOG_MODAL,
+                                       gtk_message_type, buttons, "%s",
                                        message_text.ToString().c_str());
-  g_signal_connect(gtk_dialog_,
-                   "delete-event",
-                   G_CALLBACK(gtk_widget_hide_on_delete),
-                   NULL);
+  g_signal_connect(gtk_dialog_, "delete-event",
+                   G_CALLBACK(gtk_widget_hide_on_delete), NULL);
 
   gtk_window_set_title(GTK_WINDOW(gtk_dialog_), title.c_str());
 
   GtkWidget* ok_button = gtk_dialog_add_button(GTK_DIALOG(gtk_dialog_),
-                                               GTK_STOCK_OK,
-                                               GTK_RESPONSE_OK);
+                                               GTK_STOCK_OK, GTK_RESPONSE_OK);
 
   if (dialog_type != JSDIALOGTYPE_PROMPT)
     gtk_widget_grab_focus(ok_button);
